@@ -1,30 +1,65 @@
-name: Deploy website
+name: ESLint Check
 
-on: 
+on:
   pull_request:
     branches:
-     - main
+      - main
 
 permissions:
   pull-requests: write
 
-jobs:
-  build-and-deploy:
+jobs: 
+  lint-and-deploy:
+    name: Run ESLint and Deploy Preview
     runs-on: ubuntu-latest
     steps:
-      - name: Repository Checkout
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Setup NodeJS
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ESLint
+        run: npm run lint:strict
+        continue-on-error: true
+        id: eslint
+
+      - name: Check ESLint result
+        if: steps.eslint.outcome == 'failure'
+        run: |
+          echo "ESLint found issues. Failing the workflow."
+          exit 1
+          
+      - name: Block PR if ESLint fails
+        if: steps.eslint.outcome == 'failure'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              event: 'REQUEST_CHANGES',
+              body: 'ESLint check failed. Please fix all linting issues (including warnings) before merging.'
+            })
+
+      - name: Setup NodeJS for Build
+        if: steps.eslint.outcome == 'success'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "npm"
 
-      - name: Install Dependencies
+      - name: Install All Dependencies
         run: npm ci
 
-      - name: Build project
+      - name: Build Project from React Files
         run: npm run build
 
       - name: Create _redirects file
@@ -33,7 +68,7 @@ jobs:
       - name: Install Netlify CLI
         run: npm install netlify-cli@17.10.1 -g
 
-      - name: Deploy to Netlify (Preview)
+      - name: Deploy to Netlify Preview page
         id: netlify_deploy
         run: |
           netlify deploy \
@@ -43,9 +78,6 @@ jobs:
             --json \
             --alias "healthcare-${{ github.actor }}" \
             > deploy_output.json
-
-      - name: Debug Deployment Output
-        run: cat deploy_output.json
 
       - name: Generate URL Preview
         id: url_preview
