@@ -33,7 +33,7 @@ jobs:
       - name: Install Netlify CLI
         run: npm install netlify-cli@17.10.1 -g
 
-      - name: Deploy to Netlify
+      - name: Deploy to Netlify (Preview)
         id: netlify_deploy
         run: |
           netlify deploy \
@@ -41,27 +41,25 @@ jobs:
             --site ${{ secrets.NETLIFY_SITE_ID }} \
             --auth ${{ secrets.NETLIFY_AUTH_TOKEN }} \
             --json \
-            --prod \
-            --alias healthcare \
+            --alias healthcare-${{ github.actor }} \ # Create unique alias using the pull request creator's username
             > deploy_output.json
             
       - name: Generate URL Preview
         id: url_preview
-        if: ${{ env.BRANCH_NAME != 'main' }}
         run: |
           NETLIFY_PREVIEW_URL=$(jq -r '.deploy_url' deploy_output.json)
           echo "NETLIFY_PREVIEW_URL=$NETLIFY_PREVIEW_URL" >> "$GITHUB_ENV"
           
       - name: Comment URL Preview on PR
-        if: ${{ env.BRANCH_NAME != 'main' }}
         uses: actions/github-script@v7
         with:
           script: |
             const previewUrl = process.env.NETLIFY_PREVIEW_URL;
             const issue_number = context.issue.number; // Directly get the PR number
+            const username = context.actor; // Get the username of the person who raised the PR
             await github.rest.issues.createComment({
               issue_number: issue_number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `Preview URL: ${previewUrl}`
+              body: `Preview URL for ${username}: ${previewUrl}`
             });
