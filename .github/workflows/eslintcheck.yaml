@@ -22,14 +22,14 @@ jobs:
           node-version: 20
           cache: "npm"
 
-      - name: Install Netlify
-        run: npm install netlify-cli@17.10.1 -g
-
       - name: Install Dependencies
         run: npm ci
 
       - name: Build project
         run: npm run build
+
+      - name: Install Netlify
+        run: npm install netlify-cli@17.10.1 -g
 
       - name: Deploy to Netlify
         id: netlify_deploy
@@ -47,9 +47,6 @@ jobs:
         run: |
           NETLIFY_PREVIEW_URL=$(jq -r '.deploy_url' deploy_output.json)
           echo "NETLIFY_PREVIEW_URL=$NETLIFY_PREVIEW_URL" >> "$GITHUB_OUTPUT"
-
-      - name: DEBUG=WILL BE REMOVED
-        run: echo ${{ steps.url_preview.outputs.NETLIFY_PREVIEW_URL }}
             
       - name: Comment URL Preview on PR
         uses: actions/github-script@v7
@@ -58,22 +55,24 @@ jobs:
           NETLIFY_PREVIEW_URL: ${{ steps.url_preview.outputs.NETLIFY_PREVIEW_URL }}
         with:
           script: |
-            async function comment(){
+            async function comment() {
               const result = await github.rest.repos.listPullRequestsAssociatedWithCommit({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 commit_sha: context.sha,
-              })
-              const issueNumber = result.data[0].number
-              if(issueNumber){
+              });
+
+              if (result.data.length > 0) {
+                const issueNumber = result.data[0].number;
                 await github.rest.issues.createComment({
                   issue_number: issueNumber,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   body: 'Preview URL: ' + process.env.NETLIFY_PREVIEW_URL
-                })
-              }else{
-                console.log('No PR found for commit ' + context.sha)
+                });
+              } else {
+                console.log('No PR found for commit ' + context.sha);
               }
             }
-            comment()
+
+            comment();
